@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  bytetrack:
+    build: .
+    image: bytetrack:v0.3
+    container_name: bytetrack
+    stdin_open: true  # -i equivalent
+    tty: true         # -t equivalent
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ./ByteTrack:/workspace/ByteTrack
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    devices:
+      - "/dev/video0:/dev/video0:mwr"
+    network_mode: host
+    environment:
+      - DISPLAY=${DISPLAY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
+    privileged: true
+    # Remove container after exit (--rm equivalent)
+    restart: "no"
+    # Default command is to launch a bash shell
+    command: ["bash"]

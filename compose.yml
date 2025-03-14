@@ -3,10 +3,11 @@ version: '3.8'
 services:
   bytetrack:
     build: .
-    image: bytetrack:v0.3
+    image: bytetrack:0.4
     container_name: bytetrack
     stdin_open: true  # -i equivalent
     tty: true         # -t equivalent
+    shm_size: '2gb'  # 增加共享内存
     deploy:
       resources:
         reservations:
@@ -15,7 +16,8 @@ services:
               count: all
               capabilities: [gpu]
     volumes:
-      - ./ByteTrack:/workspace/ByteTrack
+      - /home/zyb/ByteTrack:/workspace/ByteTrack
+      - /home/zyb/YOLOX:/workspace/YOLOX
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     devices:
       - "/dev/video0:/dev/video0:mwr"

@@ -12,7 +12,7 @@ from .basetrack import BaseTrack, TrackState
 
 class STrack(BaseTrack):
     shared_kalman = KalmanFilter()
-    def __init__(self, tlwh, score):
+    def __init__(self, tlwh, score, cls_id):
 
         # wait activate
         self._tlwh = np.asarray(tlwh, dtype=np.float)
@@ -22,7 +22,7 @@ class STrack(BaseTrack):
 
         self.score = score
         self.tracklet_len = 0
-
+        self.cls_id = cls_id
     def predict(self):
         mean_state = self.mean.copy()
         if self.state != TrackState.Tracked:
@@ -158,57 +158,71 @@ class BYTETracker(object):
 
     def update(self, output_results, img_info, img_size):
         self.frame_id += 1
-        activated_starcks = []
-        refind_stracks = []
-        lost_stracks = []
-        removed_stracks = []
+        activated_starcks = [] # 本帧激活的轨迹（新确认或持续跟踪）
+        refind_stracks = [] # 本帧重新确认的轨迹
+        lost_stracks = [] # 本帧丢失的轨迹
+        removed_stracks = [] # 本帧移除的轨迹
 
         if output_results.shape[1] == 5:
+            # 单类别检测：shape=[N,5] (x1,y1,x2,y2,score)
             scores = output_results[:, 4]
             bboxes = output_results[:, :4]
+            cls_ids = np.zeros(bboxes.shape[0], dtype=np.int32)
         else:
+            # 多类别检测：shape=[N,7] (x1,y1,x2,y2,score,cls_conf,cls_pred)
             output_results = output_results.cpu().numpy()
             scores = output_results[:, 4] * output_results[:, 5]
+            cls_ids = output_results[:, 6].astype(np.int32)
             bboxes = output_results[:, :4]  # x1y1x2y2
+        # 坐标归一化处理   
         img_h, img_w = img_info[0], img_info[1]
         scale = min(img_size[0] / float(img_h), img_size[1] / float(img_w))
-        bboxes /= scale
+        bboxes /= scale  # 将检测框坐标还原到原始图像尺寸
 
-        remain_inds = scores > self.args.track_thresh
-        inds_low = scores > 0.1
+        # 检测结果分级处理（ByteTrack核心策略）
+        remain_inds = scores > self.args.track_thresh  # 高置信度检测（主匹配）
+        inds_low = scores > 0.1  # 低置信度检测（二次匹配）
         inds_high = scores < self.args.track_thresh
 
         inds_second = np.logical_and(inds_low, inds_high)
         dets_second = bboxes[inds_second]
+        scores_second = scores[inds_second]
+        cls_ids_second = cls_ids[inds_second]
         dets = bboxes[remain_inds]
         scores_keep = scores[remain_inds]
-        scores_second = scores[inds_second]
+        cls_ids_keep = cls_ids[remain_inds]
 
+        # 创建STrack对象（主检测）
         if len(dets) > 0:
             '''Detections'''
-            detections = [STrack(STrack.tlbr_to_tlwh(tlbr), s) for
-                          (tlbr, s) in zip(dets, scores_keep)]
+            detections = [STrack(STrack.tlbr_to_tlwh(tlbr), s, cls_id) for
+                          (tlbr, s, cls_id) in zip(dets, scores_keep, cls_ids_keep)]
         else:
             detections = []
 
         ''' Add newly detected tracklets to tracked_stracks'''
-        unconfirmed = []
-        tracked_stracks = []  # type: list[STrack]
+        unconfirmed = [] # 未确认轨迹（新轨迹需要确认期）
+        tracked_stracks = []  # type: list[STrack], 已确认的活跃轨迹
         for track in self.tracked_stracks:
             if not track.is_activated:
-                unconfirmed.append(track)
+                unconfirmed.append(track) # 首帧未确认的轨迹
             else:
-                tracked_stracks.append(track)
+                tracked_stracks.append(track) # 正常跟踪的轨迹
 
         ''' Step 2: First association, with high score detection boxes'''
+        # 合并活跃轨迹和丢失轨迹
         strack_pool = joint_stracks(tracked_stracks, self.lost_stracks)
         # Predict the current location with KF
         STrack.multi_predict(strack_pool)
+        # 计算IOU距离矩阵
         dists = matching.iou_distance(strack_pool, detections)
         if not self.args.mot20:
+            # 融合检测置信度到距离计算
             dists = matching.fuse_score(dists, detections)
+        # 匈牙利算法匹配（阈值0.8）
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=self.args.match_thresh)
 
+        # 处理匹配成功的轨迹
         for itracked, idet in matches:
             track = strack_pool[itracked]
             det = detections[idet]
@@ -223,8 +237,8 @@ class BYTETracker(object):
         # association the untrack to the low score detections
         if len(dets_second) > 0:
             '''Detections'''
-            detections_second = [STrack(STrack.tlbr_to_tlwh(tlbr), s) for
-                          (tlbr, s) in zip(dets_second, scores_second)]
+            detections_second = [STrack(STrack.tlbr_to_tlwh(tlbr), s, cls_id) for
+                          (tlbr, s, cls_id) in zip(dets_second, scores_second, cls_ids_second)]
         else:
             detections_second = []
         r_tracked_stracks = [strack_pool[i] for i in u_track if strack_pool[i].state == TrackState.Tracked]

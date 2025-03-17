@@ -14,6 +14,35 @@ import argparse
 from yolox.data.datasets.bdd_classes import BDD_CLASSES
 
 
+# 数据集目录结构
+# ├── datasets
+# │   ├── bdd100k
+# │   │   ├── train: video images from bdd100k
+# |   |   |   ├── <video_name>
+# |   |   |   │   ├── <image_name>.jpg
+# |   |   |   │   ├── <image_name>.jpg
+# |   |   |   ├── <video_name>
+# |   |   |   │   ├── <image_name>.jpg
+# |   |   |   │   ├── <image_name>.jpg
+# │   │   ├── val: video images from bdd100k
+# |   |   |   ├── <video_name>
+# |   |   |   │   ├── <image_name>.jpg
+# |   |   |   │   ├── <image_name>.jpg
+# |   |   |   ├── <video_name>
+# |   |   |   │   ├── <image_name>.jpg
+# |   |   |   │   ├── <image_name>.jpg
+# │   │   ├── labels: bdd100k MOT labels
+# |   |   |   ├── train
+# |   |   |   │   ├── <video_name>.json
+# |   |   |   │   ├── <video_name>.json
+# |   |   |   ├── val
+# |   |   |   │   ├── <video_name>.json
+# |   |   |   │   ├── <video_name>.json
+# │   │   ├── annotations: COCO format annotations
+# |   |   |   ├── train.json
+# |   |   |   ├── val.json
+
+
 BDDMOT_LABELS_PATH = "./datasets/bdd100k/labels"
 COCOFMT_ANN_PATH = "./datasets/bdd100k/annotations"
 IMAGE_BASE_PATH = "./datasets/bdd100k"

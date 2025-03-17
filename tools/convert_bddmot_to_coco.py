@@ -94,11 +94,12 @@ def convert_bddmot_labels_to_coco(
         with open(
             os.path.join(bddmot_ds_labels_path, bddmot_video_label_filename), "r"
         ) as f:
-            # Extract video annotation
+            # 1. Extract video annotation
             video_name = bddmot_video_label_filename.split(".")[0]
             this_video_id = len(video_anns) + 1
-            if this_video_id > DATASET_SIZE[size][dataset_type]:
-                break
+            if size == "sample" or size == "small":
+                if this_video_id > DATASET_SIZE[size][dataset_type]:
+                    break
 
             print(f"Processing video {video_name} - {len(video_anns)}")
             this_video_ann = {
@@ -109,7 +110,7 @@ def convert_bddmot_labels_to_coco(
 
             bddmot_video_labels = json.load(f)
             for bdd_image_label in bddmot_video_labels:
-                # Extract image annotation
+                # 2. Extract image annotation
                 frame_idx = bdd_image_label["frameIndex"] + 1
                 this_image_id = len(image_anns) + 1
                 this_img_name = video_name + "/" + bdd_image_label["name"]
@@ -118,6 +119,7 @@ def convert_bddmot_labels_to_coco(
                 ):
                     print(f"Image {this_img_name} does not exist")
                     continue
+
                 this_image_ann = {
                     "id": this_image_id,
                     "file_name": this_img_name,

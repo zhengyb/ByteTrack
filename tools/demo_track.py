@@ -275,35 +275,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args, skip_seconds=60, p
         if args.rotate:
             frame = cv2.rotate(frame, cv2.ROTATE_180)
         if ret_val:
-            outputs, img_info = predictor.inference(frame, timer)
-            if outputs[0] is not None:
-                online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size, frame_id)
-                online_tlwhs = []
-                online_ids = []
-                online_scores = []
-                online_cls_ids = []
-                for t in online_targets:
-                    tlwh = t.tlwh
-                    tid = t.track_id    
-                    cls_id = t.cls_id
-                    pre_frame_id = t.pre_frame_id
-                    pre_tlwh = t.pre_tlwh
-                    vertical = tlwh[2] / tlwh[3] > args.aspect_ratio_thresh
-                    if tlwh[2] * tlwh[3] > args.min_box_area and not vertical:
-                        online_tlwhs.append(tlwh)
-                        online_ids.append(tid)
-                        online_scores.append(t.score)
-                        online_cls_ids.append(cls_id)
-                        results.append(
-                            f"f{frame_id},t{tid},x{tlwh[0]:.2f},y{tlwh[1]:.2f},w{tlwh[2]:.2f},h{tlwh[3]:.2f},s{t.score:.2f},c{cls_id},pf{t.pre_frame_id},px{t.pre_tlwh[0]:.2f},py{t.pre_tlwh[1]:.2f},pw{t.pre_tlwh[2]:.2f},ph{t.pre_tlwh[3]:.2f}\n"
-                        )
-                timer.toc()
-                online_im = plot_tracking(
-                    img_info['raw_img'], online_tlwhs, online_ids, online_cls_ids, frame_id=frame_id + 1, fps=1. / timer.average_time
-                )
-            else:
-                timer.toc()
-                online_im = img_info['raw_img']
+            online_im = track_on_image(predictor, tracker, frame, frame_id, timer, exp, args, results, frame)
             if args.save_result:
                 vid_writer.write(online_im)
             ch = cv2.waitKey(1)
@@ -320,7 +292,44 @@ def imageflow_demo(predictor, vis_folder, current_time, args, skip_seconds=60, p
         logger.info(f"save results to {res_file}")
 
 
-def main(exp, args):
+
+def track_on_image(predictor, tracker, frame, frame_id, timer, exp, args, results, output_image):
+        if True:
+            outputs, img_info = predictor.inference(frame, timer)
+            if outputs[0] is not None:
+                online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size, frame_id)
+                online_tlwhs = []
+                online_ids = []
+                online_scores = []
+                online_cls_ids = []
+                for t in online_targets:
+                    tlwh = t.tlwh
+                    tid = t.track_id    
+                    cls_id = t.cls_id
+                    vertical = tlwh[2] / tlwh[3] > args.aspect_ratio_thresh
+                    if tlwh[2] * tlwh[3] > args.min_box_area and not vertical:
+                        online_tlwhs.append(tlwh)
+                        online_ids.append(tid)
+                        online_scores.append(t.score)
+                        online_cls_ids.append(cls_id)
+                        results.append(
+                            f"f{frame_id},t{tid},x{tlwh[0]:.2f},y{tlwh[1]:.2f},w{tlwh[2]:.2f},h{tlwh[3]:.2f},s{t.score:.2f},c{cls_id},pf{t.pre_frame_id},px{t.pre_tlwh[0]:.2f},py{t.pre_tlwh[1]:.2f},pw{t.pre_tlwh[2]:.2f},ph{t.pre_tlwh[3]:.2f}\n"
+                        )
+                timer.toc()
+                online_im = plot_tracking(
+                    output_image, online_tlwhs, online_ids, online_cls_ids, frame_id=frame_id + 1, fps=1. / timer.average_time
+                )
+            else:
+                timer.toc()
+                online_im = output_image
+            return online_im
+        else:
+            online_im = output_image
+            return online_im
+
+
+
+def main_init(exp, args):
     if not args.experiment_name:
         args.experiment_name = exp.exp_name
 
@@ -381,6 +390,10 @@ def main(exp, args):
 
     predictor = Predictor(model, exp, trt_file, decoder, args.device, args.fp16)
     current_time = time.localtime()
+
+    return predictor, vis_folder, current_time, args
+
+def main_process(predictor, vis_folder, current_time, args):
     if args.demo == "image":
         image_demo(predictor, vis_folder, current_time, args)
     elif args.demo == "video" or args.demo == "webcam":
@@ -391,4 +404,5 @@ if __name__ == "__main__":
     args = make_parser().parse_args()
     exp = get_exp(args.exp_file, args.name)
 
-    main(exp, args)
+    predictor, vis_folder, current_time, args = main_init(exp, args)
+    main_process(predictor, vis_folder, current_time, args)

@@ -189,13 +189,15 @@ def image_demo(predictor, vis_folder, current_time, args):
     for frame_id, img_path in enumerate(files, 1):
         outputs, img_info = predictor.inference(img_path, timer)
         if outputs[0] is not None:
-            online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size)
+            online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size, frame_id)
             online_tlwhs = []
             online_ids = []
             online_scores = []
             online_cls_ids = []
             for t in online_targets:
                 tlwh = t.tlwh
+                pre_frame_id = t.pre_frame_id
+                pre_tlwh = t.pre_tlwh
                 tid = t.track_id
                 cls_id = t.cls_id
                 vertical = tlwh[2] / tlwh[3] > args.aspect_ratio_thresh
@@ -206,7 +208,7 @@ def image_demo(predictor, vis_folder, current_time, args):
                     online_cls_ids.append(cls_id)
                     # save results
                     results.append(
-                        f"{frame_id},{tid},{tlwh[0]:.2f},{tlwh[1]:.2f},{tlwh[2]:.2f},{tlwh[3]:.2f},{t.score:.2f},{cls_id},-1,-1\n"
+                        f"f{frame_id},t{tid},x{tlwh[0]:.2f},y{tlwh[1]:.2f},w{tlwh[2]:.2f},h{tlwh[3]:.2f},s{t.score:.2f},c{cls_id},pf{pre_frame_id},px{pre_tlwh[0]:.2f},py{pre_tlwh[1]:.2f},pw{pre_tlwh[2]:.2f},ph{pre_tlwh[3]:.2f}\n"
                     )
             timer.toc()
             online_im = plot_tracking(
@@ -237,13 +239,16 @@ def image_demo(predictor, vis_folder, current_time, args):
         logger.info(f"save results to {res_file}")
 
 
-def imageflow_demo(predictor, vis_folder, current_time, args):
+def imageflow_demo(predictor, vis_folder, current_time, args, skip_seconds=60, process_fps=5):
     cap = cv2.VideoCapture(args.path if args.demo == "video" else args.camid)
     width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)  # float
     height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float
     fps = cap.get(cv2.CAP_PROP_FPS)
     timestamp = time.strftime("%Y_%m_%d_%H_%M_%S", current_time)
     save_folder = osp.join(vis_folder, timestamp)
+    skip_frames = int(skip_seconds * fps)
+    process_interval = int(fps / process_fps)
+
     os.makedirs(save_folder, exist_ok=True)
     if args.demo == "video":
         save_path = osp.join(save_folder, args.path.split("/")[-1])
@@ -251,22 +256,28 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
         save_path = osp.join(save_folder, "camera.mp4")
     logger.info(f"video save_path is {save_path}")
     vid_writer = cv2.VideoWriter(
-        save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
+        save_path, cv2.VideoWriter_fourcc(*"mp4v"), process_fps, (int(width), int(height))
     )
     tracker = BYTETracker(args, frame_rate=30)
     timer = Timer()
     frame_id = 0
     results = []
     while True:
-        if frame_id % 20 == 0:
-            logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
         ret_val, frame = cap.read()
+        if frame_id < skip_frames:
+            frame_id += 1
+            continue
+        if frame_id % process_interval != 0:
+            frame_id += 1
+            continue
+        if frame_id % (process_interval * 10) == 0:
+            logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
         if args.rotate:
             frame = cv2.rotate(frame, cv2.ROTATE_180)
         if ret_val:
             outputs, img_info = predictor.inference(frame, timer)
             if outputs[0] is not None:
-                online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size)
+                online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size, frame_id)
                 online_tlwhs = []
                 online_ids = []
                 online_scores = []
@@ -275,6 +286,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                     tlwh = t.tlwh
                     tid = t.track_id    
                     cls_id = t.cls_id
+                    pre_frame_id = t.pre_frame_id
+                    pre_tlwh = t.pre_tlwh
                     vertical = tlwh[2] / tlwh[3] > args.aspect_ratio_thresh
                     if tlwh[2] * tlwh[3] > args.min_box_area and not vertical:
                         online_tlwhs.append(tlwh)
@@ -282,7 +295,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                         online_scores.append(t.score)
                         online_cls_ids.append(cls_id)
                         results.append(
-                            f"{frame_id},{tid},{tlwh[0]:.2f},{tlwh[1]:.2f},{tlwh[2]:.2f},{tlwh[3]:.2f},{t.score:.2f},{cls_id},-1,-1\n"
+                            f"f{frame_id},t{tid},x{tlwh[0]:.2f},y{tlwh[1]:.2f},w{tlwh[2]:.2f},h{tlwh[3]:.2f},s{t.score:.2f},c{cls_id},pf{t.pre_frame_id},px{t.pre_tlwh[0]:.2f},py{t.pre_tlwh[1]:.2f},pw{t.pre_tlwh[2]:.2f},ph{t.pre_tlwh[3]:.2f}\n"
                         )
                 timer.toc()
                 online_im = plot_tracking(

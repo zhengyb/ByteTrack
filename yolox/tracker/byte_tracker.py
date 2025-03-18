@@ -23,6 +23,8 @@ class STrack(BaseTrack):
         self.score = score
         self.tracklet_len = 0
         self.cls_id = cls_id
+        self.pre_frame_id = 0
+        self.pre_tlwh = np.copy(self._tlwh)
     def predict(self):
         mean_state = self.mean.copy()
         if self.state != TrackState.Tracked:
@@ -35,6 +37,7 @@ class STrack(BaseTrack):
             multi_mean = np.asarray([st.mean.copy() for st in stracks])
             multi_covariance = np.asarray([st.covariance for st in stracks])
             for i, st in enumerate(stracks):
+                st.record_pre_tlwh() # TODO: need test
                 if st.state != TrackState.Tracked:
                     multi_mean[i][7] = 0
             multi_mean, multi_covariance = STrack.shared_kalman.multi_predict(multi_mean, multi_covariance)
@@ -50,7 +53,8 @@ class STrack(BaseTrack):
 
         self.tracklet_len = 0
         self.state = TrackState.Tracked
-        if frame_id == 1:
+        #if frame_id == 1:
+        if frame_id > 1:
             self.is_activated = True
         # self.is_activated = True
         self.frame_id = frame_id
@@ -67,6 +71,10 @@ class STrack(BaseTrack):
         if new_id:
             self.track_id = self.next_id()
         self.score = new_track.score
+
+    def record_pre_tlwh(self):
+        self.pre_tlwh = np.copy(self.tlwh)
+        self.pre_frame_id = self.frame_id
 
     def update(self, new_track, frame_id):
         """
@@ -156,8 +164,9 @@ class BYTETracker(object):
         self.max_time_lost = self.buffer_size
         self.kalman_filter = KalmanFilter()
 
-    def update(self, output_results, img_info, img_size):
-        self.frame_id += 1
+    def update(self, output_results, img_info, img_size, frame_id):
+        #self.frame_id += 1
+        self.frame_id = frame_id
         activated_starcks = [] # 本帧激活的轨迹（新确认或持续跟踪）
         refind_stracks = [] # 本帧重新确认的轨迹
         lost_stracks = [] # 本帧丢失的轨迹

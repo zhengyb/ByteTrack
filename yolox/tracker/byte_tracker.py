@@ -23,8 +23,9 @@ class STrack(BaseTrack):
         self.score = score
         self.tracklet_len = 0
         self.cls_id = cls_id
-        self.pre_frame_id = 0
-        self.pre_tlwh = np.copy(self._tlwh)
+        self.prev_frame_id = 0
+        self.prev_tlwh = np.copy(self._tlwh)
+
     def predict(self):
         mean_state = self.mean.copy()
         if self.state != TrackState.Tracked:
@@ -73,8 +74,8 @@ class STrack(BaseTrack):
         self.score = new_track.score
 
     def record_pre_tlwh(self):
-        self.pre_tlwh = np.copy(self.tlwh)
-        self.pre_frame_id = self.frame_id
+        self.prev_tlwh = np.copy(self.tlwh)
+        self.prev_frame_id = self.frame_id
 
     def update(self, new_track, frame_id):
         """
@@ -117,6 +118,18 @@ class STrack(BaseTrack):
         ret = self.tlwh.copy()
         ret[2:] += ret[:2]
         return ret
+
+    @property
+    def bmwh(self):
+        """Convert bounding box to format `(bottom middle x, bottom middle y, width, height)`"""
+        return self.tlwh_to_bmwh(self.tlwh)
+
+    @staticmethod
+    def tlwh_to_bmwh(tlwh):
+        """Convert bounding box to format `(bottom middle x, bottom middle y, width, height)`"""
+        x = tlwh[0] + tlwh[2] / 2
+        y = tlwh[1] + tlwh[3]
+        return np.array([x, y, tlwh[2], tlwh[3]])
 
     @staticmethod
     # @jit(nopython=True)

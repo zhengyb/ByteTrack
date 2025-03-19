@@ -14,3 +14,19 @@ BDD_CLASSES = (
     "bike",
     "train",
 )
+
+BDD_COLLISION_CLASSES = (
+    "person",
+    "car",
+    "bus",
+    "truck",
+    "rider",
+    "motor",
+    "bike",
+    "train",
+)
+
+
+def is_bdd_collision_class(cls_id):
+    cls_name = BDD_CLASSES[cls_id]
+    return cls_name in BDD_COLLISION_CLASSES

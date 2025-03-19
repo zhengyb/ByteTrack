@@ -275,7 +275,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args, skip_seconds=60, p
         if args.rotate:
             frame = cv2.rotate(frame, cv2.ROTATE_180)
         if ret_val:
-            online_im = track_on_image(predictor, tracker, frame, frame_id, timer, exp, args, results, frame)
+            online_im, _ = track_on_image(predictor, tracker, frame, frame_id, timer, exp, args, results, frame)
             if args.save_result:
                 vid_writer.write(online_im)
             ch = cv2.waitKey(1)
@@ -313,7 +313,7 @@ def track_on_image(predictor, tracker, frame, frame_id, timer, exp, args, result
                         online_scores.append(t.score)
                         online_cls_ids.append(cls_id)
                         results.append(
-                            f"f{frame_id},t{tid},x{tlwh[0]:.2f},y{tlwh[1]:.2f},w{tlwh[2]:.2f},h{tlwh[3]:.2f},s{t.score:.2f},c{cls_id},pf{t.pre_frame_id},px{t.pre_tlwh[0]:.2f},py{t.pre_tlwh[1]:.2f},pw{t.pre_tlwh[2]:.2f},ph{t.pre_tlwh[3]:.2f}\n"
+                            f"f{frame_id},t{tid},x{tlwh[0]:.2f},y{tlwh[1]:.2f},w{tlwh[2]:.2f},h{tlwh[3]:.2f},s{t.score:.2f},c{cls_id},pf{t.prev_frame_id},px{t.prev_tlwh[0]:.2f},py{t.prev_tlwh[1]:.2f},pw{t.prev_tlwh[2]:.2f},ph{t.prev_tlwh[3]:.2f}\n"
                         )
                 timer.toc()
                 online_im = plot_tracking(
@@ -322,10 +322,10 @@ def track_on_image(predictor, tracker, frame, frame_id, timer, exp, args, result
             else:
                 timer.toc()
                 online_im = output_image
-            return online_im
+            return online_im, online_targets
         else:
             online_im = output_image
-            return online_im
+            return online_im, None
 
 
 
